@@ -9,6 +9,7 @@ import numpy as np
 from scipy.ndimage.filters import gaussian_filter
 
 from albumentations.augmentations.bbox_utils import denormalize_bbox, normalize_bbox
+from albumentations.augmentations.keypoints_utils import angle_to_2pi_range
 
 MAX_VALUES_BY_DTYPE = {
     np.dtype("uint8"): 255,
@@ -16,6 +17,15 @@ MAX_VALUES_BY_DTYPE = {
     np.dtype("uint32"): 4294967295,
     np.dtype("float32"): 1.0,
 }
+
+
+def angle_2pi_range(func):
+    @wraps(func)
+    def wrapped_function(keypoints, *args, **kwargs):
+        [x, y, a, s] = func(keypoints, *args, **kwargs)
+        return [x, y, angle_to_2pi_range(a), s]
+
+    return wrapped_function
 
 
 def clip(img, dtype, maxval):
@@ -30,13 +40,6 @@ def clipped(func):
         return clip(func(img, *args, **kwargs), dtype, maxval)
 
     return wrapped_function
-
-
-def angle_to_2pi_range(angle):
-    if 0 <= angle <= 2 * np.pi:
-        return angle
-
-    return angle % (2 * np.pi)
 
 
 def preserve_shape(func):
@@ -232,6 +235,7 @@ def bbox_shift_scale_rotate(bbox, angle, scale, dx, dy, interpolation, rows, col
     return [min(tr_points[:, 0]), min(tr_points[:, 1]), max(tr_points[:, 0]), max(tr_points[:, 1])]
 
 
+@angle_2pi_range
 def keypoint_shift_scale_rotate(keypoint, angle, scale, dx, dy, rows, cols, **params):
     height, width = rows, cols
     center = (width / 2, height / 2)
@@ -1484,6 +1488,7 @@ def bbox_transpose(bbox, axis, rows, cols):
     return bbox
 
 
+@angle_2pi_range
 def keypoint_vflip(kp, rows, cols):
     """Flip a keypoint vertically around the x-axis."""
     x, y, angle, scale = kp
@@ -1493,6 +1498,7 @@ def keypoint_vflip(kp, rows, cols):
     return [x, (rows - 1) - y, angle, scale]
 
 
+@angle_2pi_range
 def keypoint_hflip(kp, rows, cols):
     """Flip a keypoint horizontally around the y-axis."""
     x, y, angle, scale = kp
@@ -1521,6 +1527,7 @@ def keypoint_flip(bbox, d, rows, cols):
     return bbox
 
 
+@angle_2pi_range
 def keypoint_rot90(keypoint, factor, rows, cols, **params):
     """Rotates a keypoint by 90 degrees CCW (see np.rot90)
 
@@ -1542,6 +1549,7 @@ def keypoint_rot90(keypoint, factor, rows, cols, **params):
     return keypoint
 
 
+@angle_2pi_range
 def keypoint_rotate(keypoint, angle, rows, cols, **params):
     matrix = cv2.getRotationMatrix2D(((cols - 1) * 0.5, (rows - 1) * 0.5), angle, 1.0)
     x, y, a, s = keypoint
@@ -1609,7 +1617,6 @@ def swap_tiles_on_image(image, tiles):
 
 def keypoint_transpose(keypoint):
     x, y, angle, scale = keypoint
-    angle = angle_to_2pi_range(angle)
 
     if angle <= np.pi:
         angle = np.pi - angle
